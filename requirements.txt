@@ -2,3 +2,4 @@ flask
 webauthn 
 requests 
 gunicorn
+flask_cors
