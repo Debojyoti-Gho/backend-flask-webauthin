@@ -52,10 +52,13 @@ def register_options():
     if not user_id or not user_name:
         return jsonify({"status": "error", "message": "User ID and User Name are required!"}), 400
 
+    # Ensure user_id is encoded as bytes (if it's a string)
+    user_id_bytes = user_id.encode('utf-8') if isinstance(user_id, str) else user_id
+
     registration_options = generate_registration_options(
         rp_name="StreamlitApp",
         rp_id="localhost",
-        user_id=user_id,
+        user_id=user_id_bytes,  # Pass encoded user_id as bytes
         user_name=user_name,
         user_display_name=user_name
     )
