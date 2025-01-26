@@ -6,6 +6,11 @@ import json
 
 app = Flask(__name__)
 
+# Route for the root URL (to avoid 404 error)
+@app.route('/')
+def home():
+    return 'Welcome to the WebAuthn API!'
+
 # SQLite Database Initialization
 def init_db():
     conn = sqlite3.connect('users.db')
