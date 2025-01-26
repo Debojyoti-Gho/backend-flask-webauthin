@@ -43,6 +43,7 @@ def db_query(query, params=(), fetchone=False):
         conn.close()
 
 # Register options: Generate registration options and send to frontend
+# Register options: Generate registration options and send to frontend
 @app.route('/register_options', methods=['POST'])
 def register_options():
     user_id = request.json.get("user_id")
@@ -51,22 +52,31 @@ def register_options():
     if not user_id or not user_name:
         return jsonify({"status": "error", "message": "User ID and User Name are required!"}), 400
 
-    # Convert user_id to bytes
-    user_id_bytes = user_id.encode('utf-8')
-
     registration_options = generate_registration_options(
         rp_name="StreamlitApp",
         rp_id="localhost",
-        user_id=user_id_bytes,  # Pass user_id as bytes
+        user_id=user_id,
         user_name=user_name,
         user_display_name=user_name
     )
 
+    # Convert registration options into a serializable format
+    registration_options_dict = {
+        'challenge': base64.b64encode(registration_options.challenge).decode('utf-8'),
+        'rp': registration_options.rp.to_dict(),
+        'user': registration_options.user.to_dict(),
+        'pub_key_cred_params': [param.to_dict() for param in registration_options.pub_key_cred_params],
+        'timeout': registration_options.timeout,
+        'attestation': registration_options.attestation,
+        'exclude_credentials': registration_options.exclude_credentials
+    }
+
     # Store registration options temporarily for verification later
     store_query = "INSERT OR REPLACE INTO users (user_id, user_name, credential_data) VALUES (?, ?, ?)"
-    db_query(store_query, (user_id, user_name, json.dumps(registration_options)))
+    db_query(store_query, (user_id, user_name, json.dumps(registration_options_dict)))
 
-    return jsonify(registration_options)
+    return jsonify(registration_options_dict)
+
 
 # Register response: Verify registration data (attestation)
 @app.route('/register_response', methods=['POST'])
