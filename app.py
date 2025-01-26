@@ -3,8 +3,10 @@ from webauthn import generate_registration_options, verify_registration_response
 import sqlite3
 import base64
 import json
+from flask_cors import CORS  # For enabling CORS
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Route for the root URL (to avoid 404 error)
 @app.route('/')
@@ -24,11 +26,30 @@ def init_db():
 
 init_db()
 
+# Utility function to handle SQLite operations
+def db_query(query, params=(), fetchone=False):
+    try:
+        conn = sqlite3.connect('users.db')
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        if fetchone:
+            result = cursor.fetchone()
+            return result
+        return None
+    except sqlite3.Error as e:
+        return {"error": str(e)}
+    finally:
+        conn.close()
+
 # Register options: Generate registration options and send to frontend
 @app.route('/register_options', methods=['POST'])
 def register_options():
     user_id = request.json.get("user_id")
     user_name = request.json.get("user_name")
+
+    if not user_id or not user_name:
+        return jsonify({"status": "error", "message": "User ID and User Name are required!"}), 400
 
     registration_options = generate_registration_options(
         rp_name="StreamlitApp",
@@ -39,12 +60,8 @@ def register_options():
     )
 
     # Store registration options temporarily for verification later
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO users (user_id, user_name, credential_data) VALUES (?, ?, ?)",
-                   (user_id, user_name, json.dumps(registration_options)))
-    conn.commit()
-    conn.close()
+    store_query = "INSERT OR REPLACE INTO users (user_id, user_name, credential_data) VALUES (?, ?, ?)"
+    db_query(store_query, (user_id, user_name, json.dumps(registration_options)))
 
     return jsonify(registration_options)
 
@@ -55,11 +72,8 @@ def register_response():
     response_data = request.json.get("response_data")
 
     # Retrieve stored registration options
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT credential_data FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
+    query = "SELECT credential_data FROM users WHERE user_id = ?"
+    row = db_query(query, (user_id,), fetchone=True)
 
     if not row:
         return jsonify({"status": "error", "message": "User not found!"}), 400
@@ -72,14 +86,10 @@ def register_response():
             expected_rp_id="localhost",
             expected_origin="http://localhost:8501"
         )
-        
+
         # Store the user's public key credential
-        conn = sqlite3.connect('users.db')
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET credential_data = ? WHERE user_id = ?",
-                       (json.dumps(credential), user_id))
-        conn.commit()
-        conn.close()
+        update_query = "UPDATE users SET credential_data = ? WHERE user_id = ?"
+        db_query(update_query, (json.dumps(credential), user_id))
 
         return jsonify({"status": "success", "message": "Registration successful!"}), 200
     except Exception as e:
@@ -90,11 +100,8 @@ def register_response():
 def login_options():
     user_id = request.json.get("user_id")
 
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT credential_data FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
+    query = "SELECT credential_data FROM users WHERE user_id = ?"
+    row = db_query(query, (user_id,), fetchone=True)
 
     if not row:
         return jsonify({"status": "error", "message": "User not found!"}), 400
@@ -114,11 +121,8 @@ def login_response():
     user_id = request.json.get("user_id")
     response_data = request.json.get("response_data")
 
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT credential_data FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
+    query = "SELECT credential_data FROM users WHERE user_id = ?"
+    row = db_query(query, (user_id,), fetchone=True)
 
     if not row:
         return jsonify({"status": "error", "message": "User not found!"}), 400
