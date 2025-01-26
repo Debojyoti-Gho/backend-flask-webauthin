@@ -1,0 +1,5 @@
+flask 
+webauthn 
+requests 
+sqlite3 
+gunicorn
